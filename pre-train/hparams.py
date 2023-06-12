@@ -20,9 +20,9 @@ def create_hparams(hparams_string=None, verbose=False):
         ################################
         # Data Parameters              #
         ################################
-        training_list='/home/jxzhang/Documents/DataSets/VCTK/list/train_english_extend_no_indian.list',
-        validation_list='/home/jxzhang/Documents/DataSets/VCTK/list/eval_english_extend_no_indian.list',
-        mel_mean_std='/home/jxzhang/Documents/DataSets/VCTK/mel_mean_std.npy',
+        training_list='/home/sleem/sleem/nonparaSeq2seqVC_code/VCTK/list/train_english_extend_no_indian.list',
+        validation_list='/home/sleem/sleem/nonparaSeq2seqVC_code/VCTK/list/eval_english_extend_no_indian.list',
+        mel_mean_std='/mnt/deeplearning/datasetext00/proc/sleem/mel_spec/norm//VCTK/mel_mean_std.npy',
 
         ################################
         # Data Parameters              #

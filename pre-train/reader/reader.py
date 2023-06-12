@@ -14,8 +14,8 @@ def read_text(fn):
     with open(fn) as f:
         lines = f.readlines()
         for line in lines:
-            start, end, phone = line.strip().split()
-            text.append([int(start), int(end), phone])
+            phone = line.strip().split()
+            text.append([0, 0, phone])
     return text
 
 class TextMelIDLoader(torch.utils.data.Dataset):
@@ -70,8 +70,8 @@ class TextMelIDLoader(torch.utils.data.Dataset):
         mel_path, spec_path, text_path, speaker_id = self.get_path_id(path)
         # Load data from disk
         text_input = self.get_text(text_path)
-        mel = np.load(mel_path)
-        spc = np.load(spec_path)
+        mel = np.load(mel_path).squeeze(0).T
+        spc = np.load(spec_path).squeeze(0).T
         # Normalize audio 
         mel = (mel - self.mel_mean_std[0])/ self.mel_mean_std[1]
         spc = (spc - self.spc_mean_std[0]) / self.spc_mean_std[1]

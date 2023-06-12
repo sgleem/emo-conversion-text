@@ -1,0 +1,13 @@
+48
+Traceback (most recent call last):
+  File "pre-train/reader/extract_features.py", line 147, in <module>
+    extract_dir(path,kind)
+  File "pre-train/reader/extract_features.py", line 90, in extract_dir
+    estimate_mean_std(root)
+  File "pre-train/reader/extract_features.py", line 111, in estimate_mean_std
+    specs = np.vstack(specs)
+  File "<__array_function__ internals>", line 6, in vstack
+  File "/home/sleem/anaconda3/envs/s2s-VC/lib/python3.6/site-packages/numpy/core/shape_base.py", line 283, in vstack
+    return _nx.concatenate(arrs, 0)
+  File "<__array_function__ internals>", line 6, in concatenate
+ValueError: need at least one array to concatenate
