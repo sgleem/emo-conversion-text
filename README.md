@@ -99,3 +99,10 @@ pages={540-552}}
 Part of code was adapted from the following project:
 * https://github.com/NVIDIA/tacotron2/
 * https://github.com/r9y9/deepvoice3_pytorch
+
+
+## Process
+- cd pre-process
+- python preprocess_mel.py
+- python preprocess_txt.py
+- python generate_mel_list.py

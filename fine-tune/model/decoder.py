@@ -146,7 +146,6 @@ class Decoder(nn.Module):
             stop_outputs = torch.stack(stop_outputs).unsqueeze(0)
         else:
             stop_outputs = torch.stack(stop_outputs).transpose(0, 1)
-        
         stop_outputs = stop_outputs.contiguous()
         # (T_out, B, n_mel_channels) -> (B, T_out, n_mel_channels)
         mel_outputs = torch.stack(mel_outputs).transpose(0, 1).contiguous()

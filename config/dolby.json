@@ -1,0 +1,7 @@
+{
+    "VCTK_WAV_PATH": "/mnt/deeplearning/dataset00/orig/VCTK/0.80/wav48",
+    "VCTK_TXT_PATH": "/mnt/deeplearning/dataset00/orig/VCTK/0.80/txt",
+    "ESD_PATH": "/mnt/deeplearning/datasetext00/orig/ESD",
+    "MEL_PATH": "/mnt/deeplearning/datasetext00/proc/sleem/mel_spec",
+    "PHONES_PATH": "/mnt/deeplearning/datasetext00/proc/sleem/phones"
+}

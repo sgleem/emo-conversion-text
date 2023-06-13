@@ -19,7 +19,7 @@ class SpeakerClassifier(nn.Module):
             if i == 0:
                 in_dim = hparams.encoder_embedding_dim
                 out_dim = hparams.SC_hidden_dim
-            elif i == (hparams.SC_n_convolutions-1):
+            else:
                 in_dim = hparams.SC_hidden_dim
                 out_dim = hparams.SC_hidden_dim
             
@@ -34,8 +34,7 @@ class SpeakerClassifier(nn.Module):
                 nn.LeakyReLU(0.2))
             convolutions.append(conv_layer)
         self.convolutions = nn.ModuleList(convolutions)
-        self.projection = LinearNorm(hparams.SC_hidden_dim, hparams.pretrain_n_speakers)
-        self.projection_to_A = LinearNorm(hparams.SC_hidden_dim, 1, bias=False)
+        self.projection = LinearNorm(hparams.SC_hidden_dim, hparams.n_speakers)
 
     def forward(self, x):
         # x [B, T, dim]
@@ -47,8 +46,8 @@ class SpeakerClassifier(nn.Module):
         
         # -> [B, T, dim]
         hidden = hidden.transpose(1, 2)
-        logits = self.projection_to_A(hidden)
-        
+        logits = self.projection(hidden)
+
         return logits
 
 class SpeakerEncoder(nn.Module):
@@ -63,8 +62,7 @@ class SpeakerEncoder(nn.Module):
         self.projection1 = LinearNorm(hparams.speaker_encoder_hidden_dim, 
                                       hparams.speaker_embedding_dim, 
                                       w_init_gain='tanh')
-        self.projection2 = LinearNorm(hparams.speaker_embedding_dim, 
-            hparams.pretrain_n_speakers) 
+        self.projection2 = LinearNorm(hparams.speaker_embedding_dim, hparams.n_speakers) 
     
     def forward(self, x, input_lengths):
         '''
@@ -154,14 +152,13 @@ class AudioEncoder(nn.Module):
     '''
     def __init__(self, hparams):
         super(AudioEncoder, self).__init__()
-        
+
         if hparams.spemb_input:
             input_dim = hparams.n_mel_channels + hparams.speaker_embedding_dim
         else:
             input_dim = hparams.n_mel_channels
         
-        self.lstm1 = nn.LSTM(input_dim, 
-                            int(hparams.audio_encoder_hidden_dim / 2), 
+        self.lstm1 = nn.LSTM(input_dim, int(hparams.audio_encoder_hidden_dim / 2), 
                             num_layers=1, batch_first=True, bidirectional=True)
         self.lstm2 = nn.LSTM(hparams.audio_encoder_hidden_dim*hparams.n_frames_per_step_encoder,
                              int(hparams.audio_encoder_hidden_dim / 2), 
@@ -226,7 +223,7 @@ class AudioSeq2seq(nn.Module):
 
         self.encoder = AudioEncoder(hparams)
 
-        self.decoder_rnn_dim = hparams.encoder_embedding_dim
+        self.decoder_rnn_dim = hparams.audio_encoder_hidden_dim
 
         self.attention_layer = Attention(self.decoder_rnn_dim, hparams.audio_encoder_hidden_dim,
             hparams.AE_attention_dim, hparams.AE_attention_location_n_filters,
@@ -263,8 +260,6 @@ class AudioSeq2seq(nn.Module):
         self.max_len = 100
 
     def initialize_decoder_states(self, memory, mask):
-
-
    
         B = memory.size(0)
         

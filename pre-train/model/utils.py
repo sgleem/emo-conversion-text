@@ -22,6 +22,7 @@ def get_mask_from_lengths(lengths, max_len=None):
     ids = torch.arange(0, max_len, out=torch.cuda.LongTensor(max_len))
     #print ids
     mask = (ids < lengths.unsqueeze(1)).byte()
+    mask = mask.to(torch.bool)
     return mask
 
 def to_gpu(x):

@@ -43,6 +43,7 @@ class Parrot(nn.Module):
         params_group1 = [p for p in self.embedding.parameters()]
         params_group1.extend([p for p in self.text_encoder.parameters()])
         params_group1.extend([p for p in self.audio_seq2seq.parameters()])
+
         params_group1.extend([p for p in self.speaker_encoder.parameters()])
         params_group1.extend([p for p in self.merge_net.parameters()])
         params_group1.extend([p for p in self.decoder.parameters()])
@@ -106,11 +107,12 @@ class Parrot(nn.Module):
         
         audio_seq2seq_hidden, audio_seq2seq_logit, audio_seq2seq_alignments = self.audio_seq2seq(
                 audio_input, mel_lengths, text_input_embedded, start_embedding) 
+        
         audio_seq2seq_hidden= audio_seq2seq_hidden[:,:-1, :] # -> [B, text_len, hidden_dim]
         
         
         speaker_logit_from_mel_hidden = self.speaker_classifier(audio_seq2seq_hidden) # -> [B, text_len, n_speakers]
-
+        speaker_logit_from_mel_hidden_for_sc_train = self.speaker_classifier(audio_seq2seq_hidden.detach())
         if input_text:
             hidden = self.merge_net(text_hidden, text_lengths)
         else:
@@ -122,11 +124,11 @@ class Parrot(nn.Module):
         predicted_mel, predicted_stop, alignments = self.decoder(hidden, mel_padded, text_lengths)
 
         post_output = self.postnet(predicted_mel)
-
+        
         outputs = [predicted_mel, post_output, predicted_stop, alignments,
                   text_hidden, audio_seq2seq_hidden, audio_seq2seq_logit, audio_seq2seq_alignments, 
                   speaker_logit_from_mel, speaker_logit_from_mel_hidden,
-                  text_lengths, mel_lengths]
+                  text_lengths, mel_lengths, speaker_logit_from_mel_hidden_for_sc_train]
 
         return outputs
 

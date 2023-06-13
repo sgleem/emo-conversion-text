@@ -8,11 +8,10 @@ def create_hparams(hparams_string=None, verbose=False):
         ################################
         # Experiment Parameters        #
         ################################
-        epochs=70,
+        epochs=50,
         iters_per_checkpoint=100,
         seed=1234,
         dynamic_loss_scaling=True,
-        fp16_run=False,
         distributed_run=False,
         dist_backend="nccl",
         dist_url="tcp://localhost:54321",
@@ -22,14 +21,10 @@ def create_hparams(hparams_string=None, verbose=False):
         ################################
         # Data Parameters              #
         ################################
-        training_list='/home/jxzhang/Documents/DataSets/cmu_us_slt_arctic-0.95-release/list/train_non-parallel_slt_rms.list',
-        validation_list='/home/jxzhang/Documents/DataSets/cmu_us_slt_arctic-0.95-release/list/eval_slt_rms.list',
-        mel_mean_std='/home/jxzhang/Documents/DataSets/VCTK/mel_mean_std.npy',
-
-        speaker_A='slt',
-        speaker_B='rms',
-        a_embedding_path='zero_embeddings.npy',
-        b_embedding_path='zero_embeddings.npy',
+        training_list='/home/zhoukun/nonparaSeq2seqVC_code-master/pre-train/reader/emotion_list/training_mel_list.txt',
+        validation_list='/home/zhoukun/nonparaSeq2seqVC_code-master/pre-train/reader/emotion_list/evaluation_mel_list.txt',
+        #mel_mean_std='/data07/zhoukun/VCTK-Corpus/mel_mean_std.npy',
+        mel_mean_std = '/home/zhoukun/nonparaSeq2seqVC_code-master/0013/mel_mean_std.npy',
         ################################
         # Data Parameters              #
         ################################
@@ -37,7 +32,8 @@ def create_hparams(hparams_string=None, verbose=False):
         n_spc_channels=1025,
         n_symbols=41, #
         pretrain_n_speakers=99, #
-        n_speakers=2,
+
+        n_speakers=4, #
         predict_spectrogram=False,
 
         ################################
@@ -70,13 +66,11 @@ def create_hparams(hparams_string=None, verbose=False):
         speaker_encoder_dropout=0.2,
         speaker_embedding_dim=128,
 
-        #Text Classifier parameters
-        #text_classifier_hidden_dim=256,
 
         #Speaker Classifier parameters
         SC_hidden_dim=512,
         SC_n_convolutions=3,
-        SC_kernel_size=5,
+        SC_kernel_size=1,
 
         # Decoder parameters
         feed_back_last=True,
@@ -105,19 +99,21 @@ def create_hparams(hparams_string=None, verbose=False):
         ################################
         use_saved_learning_rate=False,
         learning_rate=1e-3,
-        weight_decay=1e-6,
+        #weight_decay=1e-6,
+        weight_decay=1e-4,
         grad_clip_thresh=5.0,
-        batch_size=8,
-        warmup=7,
-        decay_rate=0.5,
-        decay_every=7,
-        
-        contrastive_loss_w=30.0,
-        speaker_encoder_loss_w=0.,
-        text_classifier_loss_w=1.0,
-        speaker_adversial_loss_w=0.2,
-        speaker_classifier_loss_w=1.0,
+        batch_size=32,
+        #batch_size = 8,
+        warmup = 7,
+        decay_rate = 0.5,
+        decay_every = 7,
 
+        contrastive_loss_w=30.0,
+        speaker_encoder_loss_w=1.0,
+        text_classifier_loss_w=1.0,
+        speaker_adversial_loss_w=20.,
+        speaker_classifier_loss_w=0.1,
+        ce_loss=False
     )
 
     if hparams_string:

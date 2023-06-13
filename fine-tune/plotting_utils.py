@@ -12,13 +12,13 @@ def save_figure_to_numpy(fig):
 
 def plot_alignment(alignment, fn):
     # [4, encoder_step, decoder_step] 
-    fig, axes = plt.subplots(1, 2)
-
-    for j in range(2):
-        g = axes[j].imshow(alignment[j,:,:].T,
-            aspect='auto', origin='lower',
-            interpolation='none')
-        plt.colorbar(g, ax=axes[j])
+    fig, axes = plt.subplots(2, 2)
+    for i in range(2):
+        for j in range(2):
+            g = axes[i][j].imshow(alignment[i*2+j,:,:].T,
+                aspect='auto', origin='lower',
+                interpolation='none')
+            plt.colorbar(g, ax=axes[i][j])
     
     plt.savefig(fn)
     plt.close()

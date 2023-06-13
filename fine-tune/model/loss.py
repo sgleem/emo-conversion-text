@@ -2,11 +2,20 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 from .utils import get_mask_from_lengths
+#from train_ser import process_mel, process_post_output, perform_SER
+import python_speech_features as ps
+
+from acrnn_test import acrnn
+from sklearn.metrics import recall_score as recall
+from sklearn.metrics import confusion_matrix as confusion
+import numpy as np
 
 class ParrotLoss(nn.Module):
     def __init__(self, hparams):
         super(ParrotLoss, self).__init__()
-        
+        self.hidden_dim = hparams.encoder_embedding_dim
+        self.ce_loss = hparams.ce_loss
+
         self.L1Loss = nn.L1Loss(reduction='none')
         self.MSELoss = nn.MSELoss(reduction='none')
         self.BCEWithLogitsLoss = nn.BCEWithLogitsLoss(reduction='none')
@@ -21,8 +30,69 @@ class ParrotLoss(nn.Module):
         self.spadv_w = hparams.speaker_adversial_loss_w
         self.spcla_w = hparams.speaker_classifier_loss_w
 
-        self.speaker_A = hparams.speaker_A
-        self.speaker_B = hparams.speaker_B
+
+    def process_mel(self, mel_input):
+
+
+        #mel_input [80,344]
+        mel_input = mel_input.T #[344,80]
+        delta1 = ps.delta(mel_input, 2)
+        delta2 = ps.delta(delta1, 2)
+
+        time = mel_input.shape[0]
+        mel = np.pad(mel_input, ((0, 800 - time), (0, 0)), 'constant', constant_values=0) #[800,80]
+        delta1 = np.pad(delta1, ((0, 800 - time), (0, 0)), 'constant', constant_values=0)
+        delta2 = np.pad(delta2, ((0, 800 - time), (0, 0)), 'constant', constant_values=0)
+
+        mel_output = np.zeros((3,800,80))
+        mel_output[0,:,:] = mel
+        mel_output[1,:,:] = delta1
+        mel_output[2,:,:] = delta2
+
+        return mel_output
+
+    def process_post_output(self, y_pred,device):
+        post_output = y_pred
+        post_output = post_output.cpu().detach().numpy()
+        size = post_output.shape[0]
+        post_output_new = np.zeros((size, 3, 800, 80))  # [32,3,800,80]
+        for index, item in enumerate(post_output):
+            item_new = self.process_mel(item)  # [3,800,80]
+            post_output_new[index, :, :, :] = item_new
+        post_output_new = torch.tensor(post_output_new, dtype=torch.float32).to(device)
+        return post_output_new
+
+    def perform_SER(self, input, target, device):
+
+        LOAD_PATH = '/home/zhoukun/SER/Speech-Emotion-Recognition-main/checkpoint/best_model_esd.pth'
+        model_SER = acrnn().to('cpu')
+        model_SER.load_state_dict(torch.load(LOAD_PATH, map_location='cpu'))
+        criterion = torch.nn.CrossEntropyLoss()
+        best_valid_uw = 0
+
+        model_SER.eval()
+        size = input.shape[0]
+        with torch.no_grad():
+            inputs = torch.tensor(input).to('cpu')
+            targets = torch.tensor(target, dtype=torch.long).to('cpu')
+            outputs, emotion_embedding_low, emotion_embedding_high = model_SER(inputs)
+            loss = criterion(outputs, targets).cpu().detach().numpy()
+
+        cost_valid = np.sum(loss)/size
+        valid_acc_uw = recall(target.cpu().detach().numpy(), np.argmax(outputs.cpu().detach().numpy(), 1), average='macro')
+        valid_conf = confusion(target.cpu().detach().numpy(), np.argmax(outputs.cpu().detach().numpy(), 1))
+
+        if valid_acc_uw > best_valid_uw:
+            best_valid_uw = valid_acc_uw
+            best_valid_conf = valid_conf
+
+        cost_valid = torch.tensor(cost_valid).to(device)
+        emotion_embedding_high = torch.tensor(emotion_embedding_high).to(device)
+        best_valid_uw = torch.tensor(best_valid_uw).to(device)
+        return cost_valid, emotion_embedding_high, best_valid_uw
+
+
+
 
     def parse_targets(self, targets, text_lengths):
         '''
@@ -47,7 +117,7 @@ class ParrotLoss(nn.Module):
 
         return text_target, mel_target, spc_target, speaker_target, stop_target
     
-    def forward(self, model_outputs, targets, eps=1e-5):
+    def forward(self, model_outputs, targets, input_text, eps=1e-5):
 
         '''
         predicted_mel [batch_size, mel_bins, T]
@@ -66,12 +136,13 @@ class ParrotLoss(nn.Module):
         predicted_mel, post_output, predicted_stop, alignments,\
             text_hidden, mel_hidden, text_logit_from_mel_hidden, \
             audio_seq2seq_alignments, \
-             speaker_logit_from_mel_hidden, \
+            speaker_logit_from_mel, speaker_logit_from_mel_hidden, \
              text_lengths, mel_lengths = model_outputs
 
         text_target, mel_target, spc_target, speaker_target, stop_target  = self.parse_targets(targets, text_lengths)
 
-        
+
+
         ## get masks ##
         mel_mask = get_mask_from_lengths(mel_lengths, mel_target.size(2)).unsqueeze(1).expand(-1, mel_target.size(1), -1).float()
         spc_mask = get_mask_from_lengths(mel_lengths, mel_target.size(2)).unsqueeze(1).expand(-1, spc_target.size(1), -1).float()
@@ -99,8 +170,7 @@ class ParrotLoss(nn.Module):
             # contrastive mask #
             contrast_mask1 =  get_mask_from_lengths(text_lengths).unsqueeze(2).expand(-1, -1, mel_hidden.size(1)) # [B, text_len] -> [B, text_len, T/r]
             contrast_mask2 = get_mask_from_lengths(text_lengths).unsqueeze(1).expand(-1, text_hidden.size(1), -1) # [B, T/r] -> [B, text_len, T/r]
-            contrast_mask = (contrast_mask1 & contrast_mask2).float() 
-
+            contrast_mask = (contrast_mask1 & contrast_mask2).float()
             text_hidden_normed = text_hidden / (torch.norm(text_hidden, dim=2, keepdim=True) + eps)
             mel_hidden_normed = mel_hidden / (torch.norm(mel_hidden, dim=2, keepdim=True) + eps)
 
@@ -124,17 +194,16 @@ class ParrotLoss(nn.Module):
         TTEXT = speaker_logit_from_mel_hidden.size(1)
         n_symbols_plus_one = text_logit_from_mel_hidden.size(2)
 
-        speaker_encoder_loss = torch.tensor(0.).cuda()
-        speaker_encoder_acc = torch.tensor(0.).cuda()
+        # speaker classification loss #
+        speaker_encoder_loss = nn.CrossEntropyLoss()(speaker_logit_from_mel, speaker_target)
+        _, predicted_speaker = torch.max(speaker_logit_from_mel,dim=1)
+        speaker_encoder_acc = ((predicted_speaker == speaker_target).float()).sum() / float(speaker_target.size(0))
 
-        
-        speaker_logit_flatten = speaker_logit_from_mel_hidden.reshape(-1) # -> [B* TTEXT]
-        predicted_speaker = (F.sigmoid(speaker_logit_flatten) > 0.5).long()
+        speaker_logit_flatten = speaker_logit_from_mel_hidden.reshape(-1, n_speakers) # -> [B* TTEXT, n_speakers]
+        _, predicted_speaker = torch.max(speaker_logit_flatten, dim=1)
         speaker_target_flatten = speaker_target.unsqueeze(1).expand(-1, TTEXT).reshape(-1)
-
         speaker_classification_acc = ((predicted_speaker == speaker_target_flatten).float() * text_mask.reshape(-1)).sum() / text_mask.sum()
-        loss = self.BCEWithLogitsLoss(speaker_logit_flatten, speaker_target_flatten.float())
-       
+        loss = self.CrossEntropyLoss(speaker_logit_flatten, speaker_target_flatten)
 
         speaker_classification_loss = torch.sum(loss * text_mask.reshape(-1)) / torch.sum(text_mask)
 
@@ -147,99 +216,28 @@ class ParrotLoss(nn.Module):
         text_classification_loss = torch.sum(loss * text_mask_plus_one.reshape(-1)) / torch.sum(text_mask_plus_one)
 
         # speaker adversival loss #
-        flatten_target = 0.5 * torch.ones_like(speaker_logit_flatten)
-        loss = self.MSELoss(F.sigmoid(speaker_logit_flatten), flatten_target)
-        mask = text_mask.reshape(-1)
-        speaker_adversial_loss = torch.sum(loss * mask) / torch.sum(mask)
+        flatten_target = 1. / n_speakers * torch.ones_like(speaker_logit_flatten)
+        loss = self.MSELoss(F.softmax(speaker_logit_flatten, dim=1), flatten_target)
+        mask = text_mask.unsqueeze(2).expand(-1,-1, n_speakers).reshape(-1, n_speakers)
 
+
+        if self.ce_loss:
+            speaker_adversial_loss = - speaker_classification_loss
+        else:
+            speaker_adversial_loss = torch.sum(loss * mask) / torch.sum(mask)
+        
         loss_list = [recon_loss, recon_loss_post,  stop_loss,
-                contrast_loss,  speaker_encoder_loss, speaker_classification_loss,
+                contrast_loss, speaker_encoder_loss, speaker_classification_loss,
                 text_classification_loss, speaker_adversial_loss]
             
         acc_list = [speaker_encoder_acc, speaker_classification_acc, text_classification_acc]
         
-        combined_loss1 = recon_loss + recon_loss_post + stop_loss + self.contr_w * contrast_loss +  \
-            self.texcl_w * text_classification_loss + \
-            self.spadv_w * speaker_adversial_loss
-
-        combined_loss2 = self.spcla_w * speaker_classification_loss
         
+        combined_loss1 = recon_loss + recon_loss_post + stop_loss + self.contr_w * contrast_loss + \
+            self.spenc_w * speaker_encoder_loss +  self.texcl_w * text_classification_loss + \
+            self.spadv_w * speaker_adversial_loss 
 
-
+        combined_loss2 = self.spcla_w * speaker_classification_loss 
+        
         return loss_list, acc_list, combined_loss1, combined_loss2
 
-
-def torch_test_grad():
-    
-    x = torch.ones((1,1))
-
-    net1 = nn.Linear(1, 1, bias=False)
-
-   
-    net1.weight.data.fill_(2.)
-    net2 = nn.Linear(1, 1, bias=False)
-    net2.weight.data.fill_(3.)
-
-    all_params = []
-
-    all_params.extend([p for p in net1.parameters()])
-    all_params.extend([p for p in net2.parameters()])
-    #print all_params
-
-    y = net1(x) ** 2
-
-    z = net2(y) ** 2
-
-    loss1 = (z - 0.)
-    loss2 = -5. * (z  - 0.) ** 2
-
-
-    for p in net2.parameters():
-        p.requires_grad = False
-
-    loss1.backward(retain_graph=True)
-
-    
-    print((net1.weight.grad))
-    print((net2.weight.grad))
-
-    opt = torch.optim.SGD(all_params, lr=0.1)
-    opt.step()
-
-    print((net1.weight))
-    print((net2.weight))
-    #net1.weight.data = net1.weight.data - 0.1 * net1.weight.grad.data
-
-    for p in net2.parameters():
-        p.requires_grad=True
-    
-    for p in net1.parameters():
-        p.requires_grad=False
-    
-    loss2.backward()
-    print((net1.weight))
-    print((net2.weight.grad))
-    print((net1.weight.grad))
-    
-    net1.zero_grad()
-    print((net1.weight.grad))
-
-def test_logic():
-    a = torch.ByteTensor([1,0,0,0,0])
-    b = torch.ByteTensor([1,1,1,0,0])
-
-    print(~a)
-    print(a & b)
-    print(a | b)
-
-    text_lengths = torch.IntTensor([2,4,3]).cuda()
-    mel_hidden_lengths =torch.IntTensor([5,6,5]).cuda()
-    contrast_mask1 =  get_mask_from_lengths(text_lengths).unsqueeze(2).expand(-1, -1, 6) # [B, text_len] -> [B, text_len, T/r]
-    contrast_mask2 = get_mask_from_lengths(mel_hidden_lengths).unsqueeze(1).expand(-1, 4, -1) # [B, T/r] -> [B, text_len, T/r]
-    contrast_mask = contrast_mask1 & contrast_mask2 
-    print(contrast_mask)
- 
-if __name__ == '__main__':
-
-    torch_test_grad()
-        

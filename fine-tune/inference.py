@@ -7,200 +7,183 @@ import os
 import librosa
 import numpy as np
 import torch
-import argparse
 from torch.utils.data import DataLoader
 
 from reader import TextMelIDLoader, TextMelIDCollate, id2ph, id2sp
 from hparams import create_hparams
 from model import Parrot, lcm
 from train import load_model
-from inference_utils import plot_data, levenshteinDistance, recover_wav
 import scipy.io.wavfile
 
-AA_tts, BB_tts, AB_vc, BA_vc = False, False, True, True
 
-parser = argparse.ArgumentParser()
-parser.add_argument('-c', '--checkpoint_path', type=str,
-                        help='directory to save checkpoints')
-parser.add_argument('--num', type=int, default=10,
-                        required=False, help='num of samples to be generated')
-parser.add_argument('--hparams', type=str,
-                        required=False, help='comma separated name=value pairs')
-args = parser.parse_args()
+########### Configuration ###########
+hparams = create_hparams()
 
+#generation list
 
-hparams = create_hparams(args.hparams)
+#hlist = '/home/jxzhang/Documents/DataSets/VCTK/list/hold_english.list' #unseen speakers list
+tlist = '/home/zhoukun/nonparaSeq2seqVC_code-master/pre-train/reader/evaluation_mel_list.txt'  #seen speakers list
 
-test_list = hparams.validation_list
-checkpoint_path=args.checkpoint_path
-gen_num = args.num
+# use seen (tlist) or unseen list (hlist)
+test_list = tlist
+checkpoint_path='/home/zhoukun/nonparaSeq2seqVC_code-master/pre-train/outdir/checkpoint_234000'
+# TTS or VC task?
+input_text=False
+# number of utterances for generation
+NUM=10
 ISMEL=(not hparams.predict_spectrogram)
+#####################################
+
+def plot_data(data, fn, figsize=(12, 4)):
+    fig, axes = plt.subplots(1, len(data), figsize=figsize)
+    for i in range(len(data)):
+        if len(data) == 1:
+            ax = axes
+        else:
+            ax = axes[i]
+        g = ax.imshow(data[i], aspect='auto', origin='lower',
+                       interpolation='none')
+
+        plt.colorbar(g, ax=ax)
+    plt.savefig(fn)
 
 
 model = load_model(hparams)
 
-
-model.load_state_dict(torch.load(checkpoint_path)['state_dict'], strict=False)
+model.load_state_dict(torch.load(checkpoint_path)['state_dict'])
 _ = model.eval()
 
-
-
-train_set_A = TextMelIDLoader(hparams.training_list, hparams.mel_mean_std,
-        hparams.speaker_A,hparams.speaker_B,
-        shuffle=False,pids=[hparams.speaker_A])
-
-train_set_B = TextMelIDLoader(hparams.training_list, hparams.mel_mean_std,
-        hparams.speaker_A,hparams.speaker_B, 
-        shuffle=False,pids=[hparams.speaker_B])
-
-test_set_A = TextMelIDLoader(test_list, hparams.mel_mean_std, 
-        hparams.speaker_A,hparams.speaker_B,
-        shuffle=False,pids=[hparams.speaker_A])
-
-test_set_B = TextMelIDLoader(test_list, hparams.mel_mean_std, 
-        hparams.speaker_A,hparams.speaker_B,
-        shuffle=False,pids=[hparams.speaker_B])
-
-sample_list_A = test_set_A.file_path_list
-sample_list_B = test_set_B.file_path_list
-
+test_set = TextMelIDLoader(test_list, hparams.mel_mean_std, shuffle=True)
+sample_list = test_set.file_path_list
 collate_fn = TextMelIDCollate(lcm(hparams.n_frames_per_step_encoder,
                         hparams.n_frames_per_step_decoder))
 
-test_loader_A = DataLoader(test_set_A, num_workers=1, shuffle=False,
+test_loader = DataLoader(test_set, num_workers=1, shuffle=False,
                               sampler=None,
                               batch_size=1, pin_memory=False,
-                              drop_last=False, collate_fn=collate_fn)
-                            
-test_loader_B = DataLoader(test_set_B, num_workers=1, shuffle=False,
-                              sampler=None,
-                              batch_size=1, pin_memory=False,
-                              drop_last=False, collate_fn=collate_fn)
-
-
-id2sp[0] = hparams.speaker_A
-id2sp[1] = hparams.speaker_B
-
-_, mel, __, speaker_id = train_set_A[0]
-reference_mel_A = speaker_id.cuda()
-ref_sp_A = id2sp[speaker_id.item()]
-
-_, mel, __, speaker_id = train_set_B[0]
-reference_mel_B = speaker_id.cuda()
-ref_sp_B = id2sp[speaker_id.item()]
+                              drop_last=True, collate_fn=collate_fn)
 
 
 
-def get_path(input_text, A, B):
-    task = 'tts' if input_text else 'vc'
+task = 'tts' if input_text else 'vc'
+path_save = os.path.join(checkpoint_path.replace('checkpoint', 'test'), task)
+path_save += '_seen' if test_list == tlist else '_unseen'
+if not os.path.exists(path_save):
+    os.makedirs(path_save)
 
-    path_save = os.path.join(checkpoint_path.replace('checkpoint', 'test'), task)
+print(path_save)
+
+def recover_wav(mel, wav_path, ismel=False, 
+        n_fft=2048, win_length=800,hop_length=200):
     
-    path_save += '_%s_to_%s'%(A, B)
-
-    if not os.path.exists(os.path.join(path_save,'wav_mel')):
-        os.makedirs(os.path.join(path_save,'wav_mel'))
-
-    if not os.path.exists(os.path.join(path_save,'mel')):
-        os.makedirs(os.path.join(path_save,'mel'))
-
-    if not os.path.exists(os.path.join(path_save,'hid')):
-        os.makedirs(os.path.join(path_save,'hid'))
+    if ismel:
+        mean, std = np.load(hparams.mel_mean_std)
+    else:
+        mean, std = np.load(hparams.mel_mean_std.replace('mel','spec'))
     
-    if not os.path.exists(os.path.join(path_save,'ali')):
-        os.makedirs(os.path.join(path_save,'ali'))
+    mean = mean[:,None]
+    std = std[:,None]
+    mel = 1.2 * mel * std + mean
+    mel = np.exp(mel)
 
-    print(path_save)
-    return path_save
+    if ismel:
+        filters = librosa.filters.mel(sr=16000, n_fft=2048, n_mels=80)
+        inv_filters = np.linalg.pinv(filters)
+        spec = np.dot(inv_filters, mel)
+    else:
+        spec = mel
+
+    def _griffin_lim(stftm_matrix, shape, max_iter=50):
+        y = np.random.random(shape)
+        for i in range(max_iter):
+            stft_matrix = librosa.core.stft(y, n_fft=n_fft, win_length=win_length, hop_length=hop_length)
+            stft_matrix = stftm_matrix * stft_matrix / np.abs(stft_matrix)
+            y = librosa.core.istft(stft_matrix, win_length=win_length, hop_length=hop_length)
+        return y
+
+    shape = spec.shape[1] * hop_length -  hop_length + 1
+
+    y = _griffin_lim(spec, shape)
+    scipy.io.wavfile.write(wav_path, 16000, y)
+    return y
 
 
-def generate(loader, reference_mel, beam_width, path_save, ref_sp, 
-        sample_list, num=10, input_text=False):
+text_input, mel, spec, speaker_id = test_set[0]
+reference_mel = mel.cuda().unsqueeze(0) 
+ref_sp = id2sp[speaker_id.item()]
 
-    with torch.no_grad():
-        errs = 0
-        totalphs = 0
+def levenshteinDistance(s1, s2):
+    if len(s1) > len(s2):
+        s1, s2 = s2, s1
 
-        for i, batch in enumerate(loader):
-            if i == num:
-                break
-            
-            sample_id = sample_list[i].split('/')[-1][9:17+4]
-            print(('%d index %s, decoding ...'%(i,sample_id)))
+    distances = list(range(len(s1) + 1))
+    for i2, c2 in enumerate(s2):
+        distances_ = [i2+1]
+        for i1, c1 in enumerate(s1):
+            if c1 == c2:
+                distances_.append(distances[i1])
+            else:
+                distances_.append(1 + min((distances[i1], distances[i1 + 1], distances_[-1])))
+        distances = distances_
+    return distances[-1]
 
-            x, y = model.parse_batch(batch)
-            predicted_mel, post_output, predicted_stop, alignments, \
-                text_hidden, audio_seq2seq_hidden, audio_seq2seq_phids, audio_seq2seq_alignments, \
-                speaker_id = model.inference(x, input_text, reference_mel, beam_width)
+with torch.no_grad():
 
-            post_output = post_output.data.cpu().numpy()[0]
-            alignments = alignments.data.cpu().numpy()[0].T
-            audio_seq2seq_alignments = audio_seq2seq_alignments.data.cpu().numpy()[0].T
+    errs = 0
+    totalphs = 0
 
-            text_hidden = text_hidden.data.cpu().numpy()[0].T #-> [hidden_dim, max_text_len]
-            audio_seq2seq_hidden = audio_seq2seq_hidden.data.cpu().numpy()[0].T
-            audio_seq2seq_phids = audio_seq2seq_phids.data.cpu().numpy()[0] # [T + 1]
-            speaker_id = speaker_id.data.cpu().numpy()[0] # scalar
-
-            task = 'TTS' if input_text else 'VC'
-
-            recover_wav(post_output, 
-                        os.path.join(path_save, 'wav_mel/Wav_%s_ref_%s_%s.wav'%(sample_id, ref_sp, task)),
-                        hparams.mel_mean_std, 
-                        ismel=ISMEL)
-            
-            post_output_path = os.path.join(path_save, 'mel/Mel_%s_ref_%s_%s.npy'%(sample_id, ref_sp, task))
-            np.save(post_output_path, post_output)
-                    
-            plot_data([alignments, audio_seq2seq_alignments], 
-                os.path.join(path_save, 'ali/Ali_%s_ref_%s_%s.pdf'%(sample_id, ref_sp, task)))
-            
-            plot_data([np.hstack([text_hidden, audio_seq2seq_hidden])], 
-                os.path.join(path_save, 'hid/Hid_%s_ref_%s_%s.pdf'%(sample_id, ref_sp, task)))
-            
-            audio_seq2seq_phids = [id2ph[id] for id in audio_seq2seq_phids[:-1]]
-            target_text = y[0].data.cpu().numpy()[0]
-            target_text = [id2ph[id] for id in target_text[:]]
-
-            if not input_text:
-                #print 'Sounds like %s, Decoded text is '%(id2sp[speaker_id])
-                print(audio_seq2seq_phids)
-                print(target_text)
+    for i, batch in enumerate(test_loader):
+        if i == NUM:
+            break
         
-            err = levenshteinDistance(audio_seq2seq_phids, target_text)
-            print(err, len(target_text))
+        sample_id = sample_list[i].split('/')[-1][9:17]
+        print(('%d index %s, decoding ...'%(i,sample_id)))
 
-            errs += err
-            totalphs += len(target_text)
+        x, y = model.parse_batch(batch)
+        predicted_mel, post_output, predicted_stop, alignments, \
+            text_hidden, audio_seq2seq_hidden, audio_seq2seq_phids, audio_seq2seq_alignments, \
+            speaker_id = model.inference(x, input_text, reference_mel, hparams.beam_width)
 
-    #print float(errs)/float(totalphs)
-    return float(errs)/float(totalphs)
+        post_output = post_output.data.cpu().numpy()[0]
+        alignments = alignments.data.cpu().numpy()[0].T
+        audio_seq2seq_alignments = audio_seq2seq_alignments.data.cpu().numpy()[0].T
 
+        text_hidden = text_hidden.data.cpu().numpy()[0].T #-> [hidden_dim, max_text_len]
+        audio_seq2seq_hidden = audio_seq2seq_hidden.data.cpu().numpy()[0].T
+        audio_seq2seq_phids = audio_seq2seq_phids.data.cpu().numpy()[0] # [T + 1]
+        speaker_id = speaker_id.data.cpu().numpy()[0] # scalar
 
-####### TTS A - A ############
+        task = 'TTS' if input_text else 'VC'
 
-if AA_tts:
-    path_save = get_path(True, ref_sp_A, ref_sp_A)
-    generate(test_loader_A, reference_mel_A, hparams.beam_width,
-        path_save, ref_sp_A, sample_list_A, num=gen_num, input_text=True)
+        recover_wav(post_output, 
+                    os.path.join(path_save, 'Wav_%s_ref_%s_%s.wav'%(sample_id, ref_sp, task)), 
+                    ismel=ISMEL)
+        
+        post_output_path = os.path.join(path_save, 'Mel_%s_ref_%s_%s.npy'%(sample_id, ref_sp, task))
+        np.save(post_output_path, post_output)
+                
+        plot_data([alignments, audio_seq2seq_alignments], 
+            os.path.join(path_save, 'Ali_%s_ref_%s_%s.pdf'%(sample_id, ref_sp, task)))
+        
+        plot_data([np.hstack([text_hidden, audio_seq2seq_hidden])], 
+            os.path.join(path_save, 'Hid_%s_ref_%s_%s.pdf'%(sample_id, ref_sp, task)))
+         
+        audio_seq2seq_phids = [id2ph[id] for id in audio_seq2seq_phids[:-1]]
+        target_text = y[0].data.cpu().numpy()[0]
+        target_text = [id2ph[id] for id in target_text[:]]
 
-####### TTS B - B ############
-if BB_tts:
-    path_save = get_path(True, ref_sp_B, ref_sp_B)
-    generate(test_loader_B, reference_mel_B, hparams.beam_width,
-        path_save, ref_sp_B, sample_list_B, num=gen_num, input_text=True)
+        print('Sounds like %s, Decoded text is '%(id2sp[speaker_id]))
 
-####### VC A - B #############
-if AB_vc:
-    path_save = get_path(False, ref_sp_A, ref_sp_B)
-    per_AB = generate(test_loader_A, reference_mel_B, hparams.beam_width,
-        path_save, ref_sp_B, sample_list_A, num=gen_num, input_text=False)
-    print(('PER %s-to-%s is %.4f'%(ref_sp_A, ref_sp_B, per_AB)))
+        print(audio_seq2seq_phids)
+        print(target_text)
+       
+        err = levenshteinDistance(audio_seq2seq_phids, target_text)
+        print(err, len(target_text))
 
-####### VC B - A #############
-if BA_vc:
-    path_save = get_path(False, ref_sp_B, ref_sp_A)
-    per_BA = generate(test_loader_B, reference_mel_A, hparams.beam_width,
-        path_save, ref_sp_A, sample_list_B, num=gen_num, input_text=False)
-    print(('PER %s-to-%s is %.4f'%(ref_sp_B, ref_sp_A, per_BA)))
+        errs += err
+        totalphs += len(target_text)
 
+print(float(errs)/float(totalphs))
+
+        
+        

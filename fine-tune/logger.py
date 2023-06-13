@@ -55,7 +55,7 @@ class ParrotLogger(SummaryWriter):
         predicted_mel, post_output, predicted_stop, alignments, \
             text_hidden, mel_hidden,  text_logit_from_mel_hidden, \
             audio_seq2seq_alignments, \
-            speaker_logit_from_mel_hidden, \
+            speaker_logit_from_mel, speaker_logit_from_mel_hidden, \
             text_lengths, mel_lengths = y_pred
 
         text_target, mel_target, spc_target, speaker_target,  stop_target  = y

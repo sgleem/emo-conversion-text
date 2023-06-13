@@ -1,16 +1,27 @@
-import tensorflow as tf
+# import tensorflow as tf
 #from text import symbols
+import json
+ENV_PATH="../config/msp.json"
+with open(ENV_PATH, 'r') as f:
+    env = json.load(f)
+MEL_PATH = env["MEL_PATH"]
 
 def create_hparams(hparams_string=None, verbose=False):
     """Create model hyperparameters. Parse nondefault from given string."""
+    class AttrDict(dict):
+        def __init__(self, *args, **kwargs):
+            super(AttrDict, self).__init__(*args, **kwargs)
+            self.__dict__ = self
 
-    hparams = tf.contrib.training.HParams(
+    # hparams = tf.contrib.training.HParams(
+    hparams = AttrDict(
         ################################
         # Experiment Parameters        #
         ################################
-        epochs=200,
-        iters_per_checkpoint=1000,
+        epochs=80,
+        iters_per_checkpoint=10000, #100
         seed=1234,
+        dynamic_loss_scaling=True,
         distributed_run=False,
         dist_backend="nccl",
         dist_url="tcp://localhost:54321",
@@ -20,16 +31,17 @@ def create_hparams(hparams_string=None, verbose=False):
         ################################
         # Data Parameters              #
         ################################
-        training_list='/home/sleem/sleem/nonparaSeq2seqVC_code/VCTK/list/train_english_extend_no_indian.list',
-        validation_list='/home/sleem/sleem/nonparaSeq2seqVC_code/VCTK/list/eval_english_extend_no_indian.list',
-        mel_mean_std='/mnt/deeplearning/datasetext00/proc/sleem/mel_spec/norm//VCTK/mel_mean_std.npy',
-
+        training_list='../data/list/training_mel_list.txt',
+        validation_list='../data/list/evaluation_mel_list.txt',
+        mel_mean_std=MEL_PATH+'/norm/VCTK/mel_mean_std.npy',
         ################################
         # Data Parameters              #
         ################################
         n_mel_channels=80,
         n_spc_channels=1025,
-        n_symbols=41, #
+        n_symbols=70, #41
+        pretrain_n_speakers=99, #
+
         n_speakers=99, #
         predict_spectrogram=False,
 
@@ -99,7 +111,9 @@ def create_hparams(hparams_string=None, verbose=False):
         weight_decay=1e-6,
         grad_clip_thresh=5.0,
         batch_size=32,
-        
+        #batch_size = 8,
+
+
         contrastive_loss_w=30.0,
         speaker_encoder_loss_w=1.0,
         text_classifier_loss_w=1.0,
@@ -107,12 +121,5 @@ def create_hparams(hparams_string=None, verbose=False):
         speaker_classifier_loss_w=0.1,
         ce_loss=False
     )
-
-    if hparams_string:
-        tf.logging.info('Parsing command line hparams: %s', hparams_string)
-        hparams.parse(hparams_string)
-
-    if verbose:
-        tf.logging.info('Final parsed hparams: %s', list(hparams.values()))
 
     return hparams

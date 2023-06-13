@@ -1,5 +1,4 @@
 import torch
-import numpy as np
 from torch import nn
 from torch.autograd import Variable
 from math import sqrt
@@ -37,23 +36,7 @@ class Parrot(nn.Module):
         
         self.postnet = PostNet(hparams)
 
-        self._initilize_emb(hparams)
-
         self.spemb_input = hparams.spemb_input
-
-    def _initilize_emb(self, hparams):
-
-        a_embedding = np.load(hparams.a_embedding_path)
-        a_embedding = np.mean(a_embedding, axis=0)
-        
-        b_embedding = np.load(hparams.b_embedding_path)
-        b_embedding = np.mean(b_embedding, axis=0)
-
-        self.sp_embedding = nn.Embedding(
-            hparams.n_speakers, hparams.speaker_embedding_dim)
-
-        self.sp_embedding.weight.data[0] =  torch.FloatTensor(a_embedding) 
-        self.sp_embedding.weight.data[1] =  torch.FloatTensor(b_embedding)
 
     def grouped_parameters(self,):
 
@@ -61,10 +44,19 @@ class Parrot(nn.Module):
         params_group1.extend([p for p in self.text_encoder.parameters()])
         params_group1.extend([p for p in self.audio_seq2seq.parameters()])
 
-        params_group1.extend([p for p in self.sp_embedding.parameters()])
+        params_group1.extend([p for p in self.speaker_encoder.parameters()])
         params_group1.extend([p for p in self.merge_net.parameters()])
         params_group1.extend([p for p in self.decoder.parameters()])
         params_group1.extend([p for p in self.postnet.parameters()])
+
+        #for pn, p in self.audio_seq2seq.name_parameters():
+        #    p.requires_grad = False
+
+        #for pn, p in self.text_encoder.name_parameters():
+        #    p.requires_grad = False
+
+        #for pn, p in self.decoder.name_parameters():
+        #    p.requires_grad = False
 
         return params_group1, [p for p in self.speaker_classifier.parameters()]
 
@@ -80,13 +72,30 @@ class Parrot(nn.Module):
         mel_lengths = to_gpu(mel_lengths).long()
         stop_token_padded = to_gpu(stop_token_padded).float()
 
-        return ((text_input_padded, mel_padded, text_lengths, mel_lengths, speaker_id),
+        return ((text_input_padded, mel_padded, text_lengths, mel_lengths),
                 (text_input_padded, mel_padded, spc_padded,  speaker_id, stop_token_padded))
 
 
     def forward(self, inputs, input_text):
+        '''
+        text_input_padded [batch_size, max_text_len]
+        mel_padded [batch_size, mel_bins, max_mel_len]
+        text_lengths [batch_size]
+        mel_lengths [batch_size]
 
-        text_input_padded, mel_padded, text_lengths, mel_lengths, speaker_id = inputs
+        #
+        predicted_mel [batch_size, mel_bins, T]
+        predicted_stop [batch_size, T/r]
+        alignment input_text==True [batch_size, T/r, max_text_len] or input_text==False [batch_size, T/r, T/r]
+        text_hidden [B, max_text_len, hidden_dim]
+        mel_hidden [B, T/r, hidden_dim]
+        spearker_logit_from_mel [B, n_speakers]
+        speaker_logit_from_mel_hidden [B, T/r, n_speakers]
+        text_logit_from_mel_hidden [B, T/r, n_symbols]
+
+        '''
+
+        text_input_padded, mel_padded, text_lengths, mel_lengths = inputs
 
         text_input_embedded = self.embedding(text_input_padded.long()).transpose(1, 2) # -> [B, text_embedding_dim, max_text_len]
         text_hidden = self.text_encoder(text_input_embedded, text_lengths) # -> [B, max_text_len, hidden_dim]
@@ -95,20 +104,21 @@ class Parrot(nn.Module):
         start_embedding = Variable(text_input_padded.data.new(B,).fill_(self.sos))
         start_embedding = self.embedding(start_embedding)
 
-        speaker_embedding = self.sp_embedding(speaker_id)
+        # -> [B, n_speakers], [B, speaker_embedding_dim] 
+        speaker_logit_from_mel, speaker_embedding = self.speaker_encoder(mel_padded, mel_lengths) 
 
         if self.spemb_input:
             T = mel_padded.size(2)
-            audio_input = torch.cat((mel_padded, 
-                speaker_embedding.detach().unsqueeze(2).expand(-1, -1, T)), dim=1)
+            audio_input = torch.cat([mel_padded, 
+                speaker_embedding.detach().unsqueeze(2).expand(-1, -1, T)], 1)
         else:
             audio_input = mel_padded
-
-        #-> [B, text_len+1, hidden_dim] [B, text_len+1, n_symbols] [B, text_len+1, T/r]
+        
         audio_seq2seq_hidden, audio_seq2seq_logit, audio_seq2seq_alignments = self.audio_seq2seq(
                 audio_input, mel_lengths, text_input_embedded, start_embedding) 
         audio_seq2seq_hidden= audio_seq2seq_hidden[:,:-1, :] # -> [B, text_len, hidden_dim]
-
+        
+        
         speaker_logit_from_mel_hidden = self.speaker_classifier(audio_seq2seq_hidden) # -> [B, text_len, n_speakers]
 
         if input_text:
@@ -117,23 +127,28 @@ class Parrot(nn.Module):
             hidden = self.merge_net(audio_seq2seq_hidden, text_lengths)
         
         L = hidden.size(1)
-        hidden = torch.cat([hidden, speaker_embedding.unsqueeze(1).expand(-1, L, -1)], -1)
+        hidden = torch.cat([hidden, speaker_embedding.detach().unsqueeze(1).expand(-1, L, -1)], -1)
 
         predicted_mel, predicted_stop, alignments = self.decoder(hidden, mel_padded, text_lengths)
 
         post_output = self.postnet(predicted_mel)
 
         outputs = [predicted_mel, post_output, predicted_stop, alignments,
-                  text_hidden, audio_seq2seq_hidden, audio_seq2seq_logit, audio_seq2seq_alignments,
-                  speaker_logit_from_mel_hidden,
+                  text_hidden, audio_seq2seq_hidden, audio_seq2seq_logit, audio_seq2seq_alignments, 
+                  speaker_logit_from_mel, speaker_logit_from_mel_hidden,
                   text_lengths, mel_lengths]
 
         return outputs
 
-
-    def inference(self, inputs, input_text, id_reference, beam_width):
-
-        text_input_padded, mel_padded, text_lengths, mel_lengths, speaker_id = inputs
+    
+    def inference(self, inputs, input_text, mel_reference, beam_width):
+        '''
+        decode the audio sequence from input
+        inputs x
+        input_text True or False
+        mel_reference [1, mel_bins, T]
+        '''
+        text_input_padded, mel_padded, text_lengths, mel_lengths = inputs
         text_input_embedded = self.embedding(text_input_padded.long()).transpose(1, 2)
         text_hidden = self.text_encoder.inference(text_input_embedded)
 
@@ -142,13 +157,12 @@ class Parrot(nn.Module):
         start_embedding = self.embedding(start_embedding) # [1, embedding_dim]
 
         #-> [B, text_len+1, hidden_dim] [B, text_len+1, n_symbols] [B, text_len+1, T/r]
-       
-        speaker_embedding = self.sp_embedding(speaker_id)
+        speaker_id, speaker_embedding = self.speaker_encoder.inference(mel_reference)
 
         if self.spemb_input:
             T = mel_padded.size(2)
-            audio_input = torch.cat((mel_padded, 
-                speaker_embedding.unsqueeze(2).expand(-1,-1,T)), dim=1)
+            audio_input = torch.cat([mel_padded, 
+                speaker_embedding.detach().unsqueeze(2).expand(-1, -1, T)], 1)
         else:
             audio_input = mel_padded
         
@@ -156,7 +170,7 @@ class Parrot(nn.Module):
                 audio_input, start_embedding, self.embedding, beam_width=beam_width) 
         audio_seq2seq_hidden= audio_seq2seq_hidden[:,:-1, :] # -> [B, text_len, hidden_dim]
 
-        speaker_embedding = self.sp_embedding(id_reference)
+        # -> [B, n_speakers], [B, speaker_embedding_dim] 
 
         if input_text:
             hidden = self.merge_net.inference(text_hidden)
@@ -164,7 +178,7 @@ class Parrot(nn.Module):
             hidden = self.merge_net.inference(audio_seq2seq_hidden)
 
         L = hidden.size(1)
-        hidden = torch.cat([hidden, speaker_embedding.unsqueeze(1).expand(-1, L, -1)], -1)
+        hidden = torch.cat([hidden, speaker_embedding.detach().unsqueeze(1).expand(-1, L, -1)], -1)
           
         predicted_mel, predicted_stop, alignments = self.decoder.inference(hidden)
 

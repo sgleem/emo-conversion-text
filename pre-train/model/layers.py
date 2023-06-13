@@ -86,7 +86,7 @@ class SpeakerEncoder(nn.Module):
  
         outputs = torch.sum(outputs,dim=1) / sorted_lengths.unsqueeze(1).float() # mean pooling -> [batch_size, dim]
 
-        outputs = F.tanh(self.projection1(outputs))
+        outputs = torch.tanh(self.projection1(outputs))
         outputs = outputs[initial_index]
         # L2 normalizing #
         embeddings = outputs / torch.norm(outputs, dim=1, keepdim=True)
@@ -101,7 +101,7 @@ class SpeakerEncoder(nn.Module):
         outputs, _ = self.lstm(x)
 
         outputs = torch.sum(outputs,dim=1) / float(outputs.size(1)) # mean pooling -> [batch_size, dim]
-        outputs = F.tanh(self.projection1(outputs))
+        outputs = torch.tanh(self.projection1(outputs))
         embeddings = outputs / torch.norm(outputs, dim=1, keepdim=True)
         logits = self.projection2(outputs)
 
@@ -303,7 +303,6 @@ class AudioSeq2seq(nn.Module):
         return hidden, logit, alignments
 
     def decode(self, decoder_input):
-
         cell_input = torch.cat((decoder_input, self.attention_context),-1)
         self.decoder_hidden, self.decoder_cell = self.decoder_rnn(
             cell_input, 
@@ -327,6 +326,7 @@ class AudioSeq2seq(nn.Module):
 
         hidden = self.project_to_hidden(hidden_and_context)
         
+        
         # dropout to increasing g
         logit = self.project_to_n_symbols(F.dropout(hidden, 0.5, self.training))
 
@@ -344,12 +344,12 @@ class AudioSeq2seq(nn.Module):
         alignments [B, T+1, max_time]
 
         '''
-
+        # print(torch.sum(mel), mel.shape)
         memory, memory_lengths = self.encoder(mel, mel_lengths)
-
+        # print(torch.sum(memory), memory.shape)
         decoder_inputs = decoder_inputs.permute(2, 0, 1) # -> [T, B, channel]
         decoder_inputs = torch.cat((start_embedding.unsqueeze(0), decoder_inputs), dim=0)
-
+        
         self.initialize_decoder_states(memory, 
             mask=~get_mask_from_lengths(memory_lengths))
 
@@ -357,16 +357,18 @@ class AudioSeq2seq(nn.Module):
         while len(hidden_outputs) < decoder_inputs.size(0):
 
             decoder_input = decoder_inputs[len(hidden_outputs)]
+            # print(decoder_input)
             hidden, logit, attention_weights = self.decode(decoder_input)
 
             hidden_outputs += [hidden]
             logit_outputs += [logit]
             alignments += [attention_weights]
+
         
         hidden_outputs, logit_outputs, alignments = \
             self.parse_decoder_outputs(
                 hidden_outputs, logit_outputs, alignments)
-
+        #print(torch.sum(hidden_outputs))
         return hidden_outputs, logit_outputs, alignments
         
     '''
