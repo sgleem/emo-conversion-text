@@ -13,7 +13,7 @@ def cal_phone_num(file):
 
 def cal_frame_num(file):
     sp = np.load(file)
-    num = sp.shape[0]
+    num = sp.shape[1]
     return num
 
 
@@ -55,7 +55,9 @@ file_list = []
 num_frame_list = []
 num_phone_list = []
 
-os.makedirs("../data/list/", exist_ok=True)
+list_data_dir = "data/list"
+
+os.makedirs(list_data_dir+"/", exist_ok=True)
 print('preparing evaluation list...')
 for file in eval_list:
 

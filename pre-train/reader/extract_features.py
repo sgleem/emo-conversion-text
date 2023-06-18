@@ -34,7 +34,7 @@ def extract_mel_spec(filename):
                                                      )
     log_mel_spectrogram = np.log(mel_spectrogram).astype(np.float32)
 
-    filename = filename.replace("/dataset00/orig/VCTK/0.80", "/dataset02/proc/sleem/VCTK-for-TTS")
+    filename = filename.replace("/media/kyunster/ssd1/corpus/VCTK/VCTK-Corpus", "data/mel_spec/VCTK")
     # print(os.path.dirname(filename))
     os.makedirs(os.path.dirname(filename), exist_ok=True)
     np.save(file=filename.replace(".wav", ".spec"), arr=log_spectrogram.T)
@@ -55,7 +55,7 @@ def extract_phonemes(filename):
                                                syllable='',
                                                word='')
         )
-    filename = filename.replace("/dataset00/orig/VCTK/0.80", "dataset02/proc/sleem/VCTK-for-TTS")
+    filename = filename.replace("/media/kyunster/ssd1/corpus/VCTK/VCTK-Corpus", "data/phones/VCTK")
     os.makedirs(os.path.dirname(filename), exist_ok=True)
     with open(filename.replace(".txt", ".phones"), "w") as outfile:
         print(phones, file=outfile)
@@ -87,7 +87,7 @@ def extract_dir(root, kind):
     pool.map(extraction_function,abs_paths)
 
     #estimate and save mean std statistics in root dir.
-    estimate_mean_std(root)
+    estimate_mean_std("data/mel_spec/VCTK/wav48")
 
 
 def estimate_mean_std(root, num=2000):
@@ -124,7 +124,7 @@ def estimate_mean_std(root, num=2000):
         
 if __name__ == "__main__":
     try:
-        path = "/mnt/deeplearning/dataset00/orig/VCTK/0.80" #sys.argv[1]
+        path = "/media/kyunster/ssd1/corpus/VCTK/VCTK-Corpus" #sys.argv[1]
         kind = sys.argv[1] #sys.argv[2]
     except:
         print(

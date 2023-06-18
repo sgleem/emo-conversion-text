@@ -426,7 +426,6 @@ class AudioSeq2seq(nn.Module):
         self.initialize_decoder_states(memory, mask=None)
         decoder_input = tile(start_embedding, beam_width)
 
-
         beam = Beam(beam_width, 0, self.eos, self.eos, 
             n_best=n_best, cuda=True, global_scorer=GNMTGlobalScorer())
         
@@ -435,7 +434,6 @@ class AudioSeq2seq(nn.Module):
         for step in range(MAX_LEN):
             if beam.done():
                 break
-            
             hidden, logit, attention_weights = self.decode(decoder_input)
             logit = F.log_softmax(logit, dim=1)
 

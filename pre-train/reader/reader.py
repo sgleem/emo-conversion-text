@@ -81,7 +81,7 @@ class TextMelIDLoader(torch.utils.data.Dataset):
     def get_path_id(self, path):
         # Custom this function to obtain paths and speaker id
         # Deduce filenames
-        text_path = path.replace("/mel_spec/", "/phones/").replace(".npy", ".txt")
+        text_path = path.replace("/mel_spec/", "/phones/").replace(".npy", ".txt")#.replace(".mel.npy", ".phones").replace("/wav48/", "/txt/")
         # text_path = path.replace('/CMU_ARCTIC', '').replace('/mel', '/txt').replace('.mel.npy', '.phones')
         # b = text_path.split('/')[-1]
         # text_path = os.path.join('/home/zhoukun/nonparaSeq2seqVC_code-master/0013/txt',b)
@@ -90,7 +90,7 @@ class TextMelIDLoader(torch.utils.data.Dataset):
         #speaker_id = path.split('/')[-3].split('_')[2]
         speaker_id = path.split('/')[-2]
         # use non-trimed version #
-        spec_path = path #path.replace('mel', 'spec')
+        spec_path = path#.replace('mel.npy', 'spec.npy')
         #text_path = text_path.replace('text_trim', 'text')
         #mel_path = mel_path.replace('mel_trim', 'mel')
         #speaker_id = path.split('/')[-3].split('_')[2]

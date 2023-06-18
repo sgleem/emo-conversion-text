@@ -3,3 +3,6 @@ events.*
 *.pdf
 *.pyc
 data/
+exp/
+log/
+outdir/

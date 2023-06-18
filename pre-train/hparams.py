@@ -19,7 +19,7 @@ def create_hparams(hparams_string=None, verbose=False):
         # Experiment Parameters        #
         ################################
         epochs=80,
-        iters_per_checkpoint=10000, #100
+        iters_per_checkpoint=1000, #100
         seed=1234,
         dynamic_loss_scaling=True,
         distributed_run=False,
@@ -34,12 +34,15 @@ def create_hparams(hparams_string=None, verbose=False):
         training_list='../data/list/training_mel_list.txt',
         validation_list='../data/list/evaluation_mel_list.txt',
         mel_mean_std=MEL_PATH+'/norm/VCTK/mel_mean_std.npy',
+        # training_list='data/list/training_mel_list.txt',
+        # validation_list='data/list/evaluation_mel_list.txt',
+        # mel_mean_std='data/mel_spec/norm/mel_mean_std.npy',
         ################################
         # Data Parameters              #
         ################################
         n_mel_channels=80,
         n_spc_channels=1025,
-        n_symbols=70, #41
+        n_symbols=41,
         pretrain_n_speakers=99, #
 
         n_speakers=99, #

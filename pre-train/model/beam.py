@@ -128,13 +128,14 @@ class Beam(object):
         flat_beam_scores = beam_scores.view(-1)
         best_scores, best_scores_id = flat_beam_scores.topk(self.size, 0,
                                                             True, True)
-
+        # print(best_scores, best_scores_id)
+        # import sys; sys.exit()
         self.all_scores.append(self.scores)
         self.scores = best_scores
 
         # best_scores_id is flattened beam x word array, so calculate which
         # word and beam each score came from
-        prev_k = best_scores_id / num_words
+        prev_k = best_scores_id // num_words
         self.prev_ks.append(prev_k)
         self.next_ys.append((best_scores_id - prev_k * num_words))
         self.attn.append(attn_out.index_select(0, prev_k))
