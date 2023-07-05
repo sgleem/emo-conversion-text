@@ -25,7 +25,7 @@ def read_text(fn):
 
 class TextMelIDLoader(torch.utils.data.Dataset):
     
-    def __init__(self, list_file, mean_std_file, shuffle=True):
+    def __init__(self, list_file, mean_std_file, shuffle=True, pids=[]):
         '''
         list_file: 3-column: (path, n_frames, n_phones)
         mean_std_file: tensor loadable into numpy, of shape (2, feat_dims), i.e. [mean_row, std_row]
@@ -35,8 +35,12 @@ class TextMelIDLoader(torch.utils.data.Dataset):
             lines = f.readlines()
             for line in lines:
                 #path, n_frame, n_phones = line.strip().split()
-                path, n_frame = line.strip().split()
+                path, n_frame, _ = line.strip().split()
                 if int(n_frame) >= 1000:
+                    continue
+                spk_id = path.split("/")[-3]
+
+                if (len(pids) != 0) and (spk_id not in pids):
                     continue
                 file_path_list.append(path)
 
@@ -46,8 +50,8 @@ class TextMelIDLoader(torch.utils.data.Dataset):
         
         self.file_path_list = file_path_list
         self.mel_mean_std = np.float32(np.load(mean_std_file))
-        self.spc_mean_std = np.float32(np.load(mean_std_file.replace('mel', 'spec')))
-        self.sp2id={'Angry':0,'Happy':1,'Sad':2,'Neutral':3}
+        self.spc_mean_std = np.float32(np.load(mean_std_file.replace('mel_mean', 'spec_mean')))
+        self.sp2id={'Angry':0,'Happy':1,'Sad':2,'Neutral':3, 'Surprise': 4}
 
     def get_path_id_o(self, path):
         # Custom this function to obtain paths and speaker id
@@ -64,19 +68,18 @@ class TextMelIDLoader(torch.utils.data.Dataset):
     def get_path_id(self, path):
         # Custom this function to obtain paths and speaker id
         # Deduce filenames
-        text_path = path.replace('/CMU_ARCTIC', '').replace('/mel', '/txt').replace('.mel.npy', '.phones')
-        b = text_path.split('/')[-1]
-        text_path = os.path.join('/home/zhoukun/nonparaSeq2seqVC_code-master/0013/txt',b)
+        spk_id = path.split("/")[-4]
+        utt_id = path.split("/")[-1].replace('.npy','.txt')
+        text_path = os.path.join("../data/phones/ESD", spk_id, utt_id)
+        # text_path = path.replace('/CMU_ARCTIC', '').replace('/mel', '/txt').replace('.mel.npy', '.phones')
+        # b = text_path.split('/')[-1]
+        # text_path = os.path.join('/home/zhoukun/nonparaSeq2seqVC_code-master/0013/txt',b)
 
-        mel_path = path.replace('spec', 'mel')
-        #speaker_id = path.split('/')[-3].split('_')[2]
-        speaker_id = path.split('/')[-2]
+        mel_path = path
+        speaker_id = path.split('/')[-3]
         # use non-trimed version #
-        spec_path = path.replace('mel', 'spec')
-        #text_path = text_path.replace('text_trim', 'text')
-        #mel_path = mel_path.replace('mel_trim', 'mel')
-        #speaker_id = path.split('/')[-3].split('_')[2]
-        speaker_id = path.split('/')[-2]
+        spec_path = path
+        speaker_id = path.split('/')[-3]
 
         return mel_path, spec_path, text_path, speaker_id
 
@@ -94,13 +97,12 @@ class TextMelIDLoader(torch.utils.data.Dataset):
         mel: [spc_bin, len_spc]
         speaker_id: [1]
         '''
-
         mel_path, spec_path, text_path, speaker_id = self.get_path_id(path)
 
         # Load data from disk
         text_input = self.get_text(text_path)
-        mel = np.load(mel_path)
-        spc = np.load(spec_path)
+        mel = np.load(mel_path).squeeze(0).T
+        spc = np.load(spec_path).squeeze(0).T
         # Normalize audio 
         mel = (mel - self.mel_mean_std[0])/ self.mel_mean_std[1]
         spc = (spc - self.spc_mean_std[0]) / self.spc_mean_std[1]
@@ -108,7 +110,7 @@ class TextMelIDLoader(torch.utils.data.Dataset):
         text_input = torch.LongTensor(text_input)
         mel = torch.from_numpy(np.transpose(mel))
         spc = torch.from_numpy(np.transpose(spc))
-        speaker_id = torch.LongTensor([sp2id[speaker_id]])
+        speaker_id = torch.LongTensor([self.sp2id[speaker_id]])
 
         return (text_input, mel, spc, speaker_id)
         

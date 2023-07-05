@@ -19,15 +19,9 @@ import scipy.io.wavfile
 ########### Configuration ###########
 hparams = create_hparams()
 
-#generation list
-
-#hlist = '/home/jxzhang/Documents/DataSets/VCTK/list/hold_english.list' #unseen speakers list
-tlist = '/home/zhoukun/nonparaSeq2seqVC_code-master/pre-train/reader/evaluation_mel_list.txt'  #seen speakers list
-
 # use seen (tlist) or unseen list (hlist)
-test_list = tlist
-checkpoint_path='/home/zhoukun/nonparaSeq2seqVC_code-master/pre-train/outdir/checkpoint_234000'
-# TTS or VC task?
+test_list = "../data/esd_list_0011/testing_mel_list.txt"
+checkpoint_path='emoVC_for_0011/checkpoint_2099'# TTS or VC task?
 input_text=False
 # number of utterances for generation
 NUM=10
@@ -67,7 +61,6 @@ test_loader = DataLoader(test_set, num_workers=1, shuffle=False,
 
 task = 'tts' if input_text else 'vc'
 path_save = os.path.join(checkpoint_path.replace('checkpoint', 'test'), task)
-path_save += '_seen' if test_list == tlist else '_unseen'
 if not os.path.exists(path_save):
     os.makedirs(path_save)
 
@@ -136,7 +129,8 @@ with torch.no_grad():
         if i == NUM:
             break
         
-        sample_id = sample_list[i].split('/')[-1][9:17]
+        sample_emo = sample_list[i].split('/')[-3]
+        sample_id = sample_emo+"_"+sample_list[i].split('/')[-1][:-4]
         print(('%d index %s, decoding ...'%(i,sample_id)))
 
         x, y = model.parse_batch(batch)
@@ -155,19 +149,15 @@ with torch.no_grad():
 
         task = 'TTS' if input_text else 'VC'
 
-        recover_wav(post_output, 
-                    os.path.join(path_save, 'Wav_%s_ref_%s_%s.wav'%(sample_id, ref_sp, task)), 
-                    ismel=ISMEL)
-        
+        # recover_wav(post_output, 
+        #             os.path.join(path_save, 'Wav_%s_ref_%s_%s.wav'%(sample_id, ref_sp, task)), 
+        #             ismel=ISMEL)
+        mean, std = np.load(hparams.mel_mean_std)
+        post_output = 1.2 * post_output.T * std + mean
+        post_output = post_output.T
         post_output_path = os.path.join(path_save, 'Mel_%s_ref_%s_%s.npy'%(sample_id, ref_sp, task))
         np.save(post_output_path, post_output)
                 
-        plot_data([alignments, audio_seq2seq_alignments], 
-            os.path.join(path_save, 'Ali_%s_ref_%s_%s.pdf'%(sample_id, ref_sp, task)))
-        
-        plot_data([np.hstack([text_hidden, audio_seq2seq_hidden])], 
-            os.path.join(path_save, 'Hid_%s_ref_%s_%s.pdf'%(sample_id, ref_sp, task)))
-         
         audio_seq2seq_phids = [id2ph[id] for id in audio_seq2seq_phids[:-1]]
         target_text = y[0].data.cpu().numpy()[0]
         target_text = [id2ph[id] for id in target_text[:]]

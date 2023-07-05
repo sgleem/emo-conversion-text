@@ -53,12 +53,6 @@ def read_vctk_txt(txt_path):
                                                 word='')
             )
     return phones
-# def post_process_txt(phone_list):
-#     out_list = []
-#     for phone in phone_list:
-#         if phone not in  [" ", ",", ".", "'"]:
-#             out_list.append(phone)
-#     return " ".join(out_list)
 def save_phones(txt_path, inp_path_prefix, corpus_type):
     phones = read_vctk_txt(txt_path)
     # phone_txt = post_process_txt(phone_list)
@@ -67,6 +61,37 @@ def save_phones(txt_path, inp_path_prefix, corpus_type):
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     with open(output_path, 'w') as f:
         print(phones, file=f)
-for vctk_txt_path in tqdm(vctk_txt_list):
-    save_phones(vctk_txt_path, VCTK_PATH, "VCTK")
+# for vctk_txt_path in tqdm(vctk_txt_list):
+#     save_phones(vctk_txt_path, VCTK_PATH, "VCTK")
+def read_esd_txt(speaker):
+    txt_path = os.path.join(ESD_PATH, speaker, speaker+".txt")
+    phones_dict = dict()
+    with open(txt_path, 'r') as f:
+        for line in f:
+            line = line.strip()
+            if line == "":
+                continue
+            utt_id = line.split("\t")[0]
+            print(utt_id)
+            text = line.split("\t")[1]
+            phones = phonemize(text,
+                                language='en-us',
+                                backend='festival',
+                                separator=Separator(phone=' ',
+                                                    syllable='',
+                                                    word='')
+                )
+            phones_dict[utt_id] = phones
+    return phones_dict
 
+esd_spk_list = ["00"+str(n) for n in range(11, 21)] # range(11, 21)
+phones_dict = read_esd_txt("0011")
+for spk_id in esd_spk_list:
+    print("Processing", spk_id)
+    for utt_id, phones in phones_dict.items():
+        true_utt_id = spk_id+"_"+utt_id.split("_")[-1]
+        txt_path = os.path.join(OUT_PATH, "ESD", spk_id, true_utt_id+".txt")
+        
+        os.makedirs(os.path.dirname(txt_path), exist_ok=True)
+        with open(txt_path, 'w') as f:
+            print(phones, file=f)

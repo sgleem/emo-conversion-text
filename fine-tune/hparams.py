@@ -1,10 +1,20 @@
-import tensorflow as tf
+# import tensorflow as tf
 #from text import symbols
+import json
+ENV_PATH="../config/msp.json"
+with open(ENV_PATH, 'r') as f:
+    env = json.load(f)
+MEL_PATH = env["MEL_PATH"]
 
 def create_hparams(hparams_string=None, verbose=False):
     """Create model hyperparameters. Parse nondefault from given string."""
+    class AttrDict(dict):
+        def __init__(self, *args, **kwargs):
+            super(AttrDict, self).__init__(*args, **kwargs)
+            self.__dict__ = self
 
-    hparams = tf.contrib.training.HParams(
+    # hparams = tf.contrib.training.HParams(
+    hparams = AttrDict(
         ################################
         # Experiment Parameters        #
         ################################
@@ -21,10 +31,12 @@ def create_hparams(hparams_string=None, verbose=False):
         ################################
         # Data Parameters              #
         ################################
-        training_list='/home/zhoukun/nonparaSeq2seqVC_code-master/pre-train/reader/emotion_list/training_mel_list.txt',
-        validation_list='/home/zhoukun/nonparaSeq2seqVC_code-master/pre-train/reader/emotion_list/evaluation_mel_list.txt',
-        #mel_mean_std='/data07/zhoukun/VCTK-Corpus/mel_mean_std.npy',
-        mel_mean_std = '/home/zhoukun/nonparaSeq2seqVC_code-master/0013/mel_mean_std.npy',
+        training_list='../data/esd_list_0011/training_mel_list.txt',
+        validation_list='../data/esd_list_0011/evaluation_mel_list.txt',
+        mel_mean_std=MEL_PATH+'/norm/ESD/mel_mean_std.npy',
+        # training_list='data/list/training_mel_list.txt',
+        # validation_list='data/list/evaluation_mel_list.txt',
+        # mel_mean_std='data/mel_spec/norm/mel_mean_std.npy',
         ################################
         # Data Parameters              #
         ################################
@@ -33,7 +45,7 @@ def create_hparams(hparams_string=None, verbose=False):
         n_symbols=41, #
         pretrain_n_speakers=99, #
 
-        n_speakers=4, #
+        n_speakers=5, #
         predict_spectrogram=False,
 
         ################################
@@ -103,10 +115,10 @@ def create_hparams(hparams_string=None, verbose=False):
         weight_decay=1e-4,
         grad_clip_thresh=5.0,
         batch_size=32,
-        #batch_size = 8,
         warmup = 7,
         decay_rate = 0.5,
         decay_every = 7,
+
 
         contrastive_loss_w=30.0,
         speaker_encoder_loss_w=1.0,
@@ -116,11 +128,7 @@ def create_hparams(hparams_string=None, verbose=False):
         ce_loss=False
     )
 
-    if hparams_string:
-        tf.logging.info('Parsing command line hparams: %s', hparams_string)
-        hparams.parse(hparams_string)
-
-    if verbose:
-        tf.logging.info('Final parsed hparams: %s', list(hparams.values()))
-
     return hparams
+
+
+

@@ -120,7 +120,8 @@ class Parrot(nn.Module):
         
         
         speaker_logit_from_mel_hidden = self.speaker_classifier(audio_seq2seq_hidden) # -> [B, text_len, n_speakers]
-
+        speaker_logit_from_mel_hidden_for_sc_train = self.speaker_classifier(audio_seq2seq_hidden.detach())
+        
         if input_text:
             hidden = self.merge_net(text_hidden, text_lengths)
         else:
@@ -136,12 +137,12 @@ class Parrot(nn.Module):
         outputs = [predicted_mel, post_output, predicted_stop, alignments,
                   text_hidden, audio_seq2seq_hidden, audio_seq2seq_logit, audio_seq2seq_alignments, 
                   speaker_logit_from_mel, speaker_logit_from_mel_hidden,
-                  text_lengths, mel_lengths]
+                  text_lengths, mel_lengths, speaker_logit_from_mel_hidden_for_sc_train]
 
         return outputs
 
     
-    def inference(self, inputs, input_text, mel_reference, beam_width):
+    def inference(self, inputs, input_text, mel_reference, beam_width, speaker_embedding=None):
         '''
         decode the audio sequence from input
         inputs x
@@ -157,7 +158,10 @@ class Parrot(nn.Module):
         start_embedding = self.embedding(start_embedding) # [1, embedding_dim]
 
         #-> [B, text_len+1, hidden_dim] [B, text_len+1, n_symbols] [B, text_len+1, T/r]
-        speaker_id, speaker_embedding = self.speaker_encoder.inference(mel_reference)
+        if speaker_embedding is None:
+            speaker_id, speaker_embedding = self.speaker_encoder.inference(mel_reference)
+        else:
+            speaker_id = None
 
         if self.spemb_input:
             T = mel_padded.size(2)

@@ -8,7 +8,7 @@ import os
 #seen_speakers.sort()
 #seen_speakers = seen_speakers[:99]
 
-seen_speakers = ['Angry','Happy','Sad','Neutral']
+seen_speakers = ['Angry','Happy','Sad','Neutral','Surprise']
 
 
 
@@ -31,6 +31,6 @@ phone_list = ['pau', 'iy', 'aa', 'ch', 'ae', 'eh',
 
 ph2id = {ph:i for i, ph in enumerate(phone_list)}
 #ph2id['ssil'] = ph2id['pau']
-sp2id={'Angry':0,'Happy':1,'Sad':2,'Neutral':3}
+sp2id={'Angry':0,'Happy':1,'Sad':2,'Neutral':3, 'Surprise': 4}
 id2ph = {i:ph for i, ph in enumerate(phone_list)}
-id2sp = {0: 'Angry', 1: 'Happy', 2: 'Sad', 3: 'Neutral'}
+id2sp = {0: 'Angry', 1: 'Happy', 2: 'Sad', 3: 'Neutral', 4: 'Surprise'}

@@ -6,3 +6,4 @@ data/
 exp/
 log/
 outdir/
+fine-tune/exp/

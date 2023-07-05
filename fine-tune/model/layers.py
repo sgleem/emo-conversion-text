@@ -86,7 +86,7 @@ class SpeakerEncoder(nn.Module):
  
         outputs = torch.sum(outputs,dim=1) / sorted_lengths.unsqueeze(1).float() # mean pooling -> [batch_size, dim]
 
-        outputs = F.tanh(self.projection1(outputs))
+        outputs = torch.tanh(self.projection1(outputs))
         outputs = outputs[initial_index]
         # L2 normalizing #
         embeddings = outputs / torch.norm(outputs, dim=1, keepdim=True)
@@ -101,7 +101,7 @@ class SpeakerEncoder(nn.Module):
         outputs, _ = self.lstm(x)
 
         outputs = torch.sum(outputs,dim=1) / float(outputs.size(1)) # mean pooling -> [batch_size, dim]
-        outputs = F.tanh(self.projection1(outputs))
+        outputs = torch.tanh(self.projection1(outputs))
         embeddings = outputs / torch.norm(outputs, dim=1, keepdim=True)
         logits = self.projection2(outputs)
 

@@ -1,9 +1,70 @@
-torch==1.0.1
-tensorflow==1.14
-numpy
-typing
-tensorboardX
-matplotlib
-phonemizer
-librosa
-Pillow
+appdirs==1.4.4
+attrs==23.1.0
+audioread==3.0.0
+Babel==2.12.1
+brotlipy==0.7.0
+certifi @ file:///croot/certifi_1683875369620/work/certifi
+cffi @ file:///croot/cffi_1670423208954/work
+charset-normalizer @ file:///tmp/build/80754af9/charset-normalizer_1630003229654/work
+clldutils==3.19.0
+colorama==0.4.6
+colorlog==6.7.0
+contourpy==1.0.7
+cryptography @ file:///croot/cryptography_1677533068310/work
+csvw==3.1.3
+cycler==0.11.0
+decorator==5.1.1
+dlinfo==1.2.1
+fonttools==4.40.0
+idna @ file:///croot/idna_1666125576474/work
+isodate==0.6.1
+joblib==1.2.0
+jsonschema==4.17.3
+kiwisolver==1.4.4
+language-tags==1.2.0
+lazy_loader==0.2
+librosa==0.10.0.post2
+llvmlite==0.40.1rc1
+lxml==4.9.2
+Markdown==3.4.3
+MarkupSafe==2.1.3
+matplotlib==3.7.1
+mkl-fft==1.3.6
+mkl-random @ file:///work/mkl/mkl_random_1682950433854/work
+mkl-service==2.4.0
+msgpack==1.0.5
+numba==0.57.0
+numpy @ file:///work/mkl/numpy_and_numpy_base_1682953417311/work
+packaging==23.1
+phonemizer==3.2.1
+Pillow==9.4.0
+pooch==1.6.0
+protobuf==3.20.3
+pycparser @ file:///tmp/build/80754af9/pycparser_1636541352034/work
+pylatexenc==2.10
+pyOpenSSL @ file:///croot/pyopenssl_1677607685877/work
+pyparsing==3.0.9
+pyrsistent==0.19.3
+PySocks @ file:///home/builder/ci_310/pysocks_1640793678128/work
+python-dateutil==2.8.2
+python-speech-features==0.6
+rdflib==6.3.2
+regex==2023.6.3
+requests @ file:///croot/requests_1682607517574/work
+rfc3986==1.5.0
+scikit-learn==1.2.2
+scipy==1.10.1
+segments==2.2.1
+six==1.16.0
+soundfile==0.12.1
+soxr==0.3.5
+tabulate==0.9.0
+tensorboardX==2.6
+threadpoolctl==3.1.0
+torch==1.13.1
+torchaudio==0.13.1
+torchvision==0.14.1
+tqdm==4.65.0
+typing_extensions @ file:///croot/typing_extensions_1686601443660/work
+uritemplate==4.1.1
+urllib3 @ file:///croot/urllib3_1686163155763/work

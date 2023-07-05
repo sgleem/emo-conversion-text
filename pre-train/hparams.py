@@ -19,7 +19,7 @@ def create_hparams(hparams_string=None, verbose=False):
         # Experiment Parameters        #
         ################################
         epochs=80,
-        iters_per_checkpoint=1000, #100
+        iters_per_checkpoint=5000, #100
         seed=1234,
         dynamic_loss_scaling=True,
         distributed_run=False,
@@ -110,7 +110,7 @@ def create_hparams(hparams_string=None, verbose=False):
         # Optimization Hyperparameters #
         ################################
         use_saved_learning_rate=False,
-        learning_rate=1e-3,
+        learning_rate=1e-5,
         weight_decay=1e-6,
         grad_clip_thresh=5.0,
         batch_size=32,

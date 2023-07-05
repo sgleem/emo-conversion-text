@@ -108,7 +108,7 @@ class ParrotLoss(nn.Module):
         stop_target = stop_target.reshape(B, -1, self.n_frames_per_step)
         stop_target = stop_target[:, :, 0]
 
-        padded = torch.tensor(text_target.data.new(B,1).zero_())
+        padded = torch.zeros(B, 1, device=text_target.device).long()
         text_target = torch.cat((text_target, padded), dim=-1)
         
         # adding the ending token for target
@@ -137,7 +137,7 @@ class ParrotLoss(nn.Module):
             text_hidden, mel_hidden, text_logit_from_mel_hidden, \
             audio_seq2seq_alignments, \
             speaker_logit_from_mel, speaker_logit_from_mel_hidden, \
-             text_lengths, mel_lengths = model_outputs
+             text_lengths, mel_lengths, speaker_logit_from_mel_hidden_for_sc_train = model_outputs
 
         text_target, mel_target, spc_target, speaker_target, stop_target  = self.parse_targets(targets, text_lengths)
 
@@ -231,6 +231,16 @@ class ParrotLoss(nn.Module):
                 text_classification_loss, speaker_adversial_loss]
             
         acc_list = [speaker_encoder_acc, speaker_classification_acc, text_classification_acc]
+        
+        # speaker classification loss - for speaker classifier train#
+        
+        speaker_logit_flatten = speaker_logit_from_mel_hidden_for_sc_train.reshape(-1, n_speakers) # -> [B* TTEXT, n_speakers]
+        _, predicted_speaker = torch.max(speaker_logit_flatten, dim=1)
+        speaker_target_flatten = speaker_target.unsqueeze(1).expand(-1, TTEXT).reshape(-1)
+        speaker_classification_acc = ((predicted_speaker == speaker_target_flatten).float() * text_mask.reshape(-1)).sum() / text_mask.sum()
+        loss = self.CrossEntropyLoss(speaker_logit_flatten, speaker_target_flatten)
+
+        speaker_classification_loss = torch.sum(loss * text_mask.reshape(-1)) / torch.sum(text_mask)
         
         
         combined_loss1 = recon_loss + recon_loss_post + stop_loss + self.contr_w * contrast_loss + \

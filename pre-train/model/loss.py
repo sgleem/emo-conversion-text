@@ -175,6 +175,8 @@ class ParrotLoss(nn.Module):
         combined_loss1 = recon_loss + recon_loss_post + stop_loss + self.contr_w * contrast_loss + \
             self.spenc_w * speaker_encoder_loss +  self.texcl_w * text_classification_loss + \
             self.spadv_w * speaker_adversial_loss
+        # combined_loss1 = recon_loss + recon_loss_post + stop_loss + self.contr_w * contrast_loss + \
+        #     self.spenc_w * speaker_encoder_loss +  self.texcl_w * text_classification_loss 
 
         combined_loss2 = self.spcla_w * speaker_classification_loss
         

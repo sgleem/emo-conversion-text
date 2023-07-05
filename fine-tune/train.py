@@ -4,6 +4,7 @@ import argparse
 import math
 from numpy import finfo
 import numpy as np
+from tqdm import tqdm
 
 import torch
 from distributed import apply_gradient_allreduce
@@ -100,9 +101,9 @@ def warm_start_model(checkpoint_path, model):
         else:
             s = v.size()
             if len(s) == 2:
-                new_state_dict[k] = torch.nn.init.normal_(torch.empty((4, s[1])))
+                new_state_dict[k] = torch.nn.init.normal_(torch.empty((hparams.n_speakers, s[1])))
             else:
-                new_state_dict[k] = torch.nn.init.normal_(torch.empty(4))
+                new_state_dict[k] = torch.nn.init.normal_(torch.empty(hparams.n_speakers))
             #new_state_dict[k].weight.requires_grad = False
             #new_state_dict[k].bias.requires_grad = False
 
@@ -150,7 +151,7 @@ def validate(model, criterion, valset, iteration, batch_size, n_gpus,
         reduced_val_tts_losses, reduced_val_vc_losses = np.zeros([8], dtype=np.float32), np.zeros([8], dtype=np.float32)
         reduced_val_tts_acces, reduced_val_vc_acces = np.zeros([3], dtype=np.float32), np.zeros([3], dtype=np.float32)
 
-        for i, batch in enumerate(val_loader):
+        for i, batch in tqdm(enumerate(val_loader), total=len(val_loader)):
 
             x, y = model.parse_batch(batch)
 
@@ -207,8 +208,8 @@ def validate(model, criterion, valset, iteration, batch_size, n_gpus,
     model.train()
     if rank == 0:
         print(("Validation loss {}: TTS {:9f}  VC {:9f}".format(iteration, val_loss_tts, val_loss_vc)))
-        logger.log_validation(val_loss_tts, reduced_val_tts_losses, reduced_val_tts_acces, model, y_tts, y_tts_pred, iteration, 'tts')
-        logger.log_validation(val_loss_vc, reduced_val_vc_losses, reduced_val_vc_acces, model, y_vc, y_vc_pred, iteration, 'vc')
+        # logger.log_validation(val_loss_tts, reduced_val_tts_losses, reduced_val_tts_acces, model, y_tts, y_tts_pred, iteration, 'tts')
+        # logger.log_validation(val_loss_vc, reduced_val_vc_losses, reduced_val_vc_acces, model, y_vc, y_vc_pred, iteration, 'vc')
 
 
 
@@ -276,7 +277,7 @@ def train(output_directory, log_directory, checkpoint_path, warm_start, n_gpus,
         if epoch > hparams.warmup:
             learning_rate = hparams.learning_rate * hparams.decay_rate ** ((epoch - hparams.warmup) // hparams.decay_every + 1)
 
-        for i, batch in enumerate(train_loader):
+        for i, batch in tqdm(enumerate(train_loader), total=len(train_loader)):
 
             start = time.time()
             
@@ -327,7 +328,7 @@ def train(output_directory, log_directory, checkpoint_path, warm_start, n_gpus,
             for p in parameters_main:
                 p.requires_grad_(requires_grad=False)
             
-         
+
             l_sc.backward()
             grad_norm_sc = torch.nn.utils.clip_grad_norm_(
                 parameters_sc, hparams.grad_clip_thresh)
@@ -338,16 +339,16 @@ def train(output_directory, log_directory, checkpoint_path, warm_start, n_gpus,
             for p in parameters_main:
                 p.requires_grad_(requires_grad=True)
 
-            if not math.isnan(redl_main) and rank == 0:
+            # if not math.isnan(redl_main) and rank == 0:
 
-                duration = time.time() - start
-                task = 'TTS' if i%2 == 0 else 'VC'
-                print(("Train {} {} {:.6f} Grad Norm {:.6f} {:.2f}s/it".format(
-                    task, iteration, redl_main+redl_sc, grad_norm_main, duration)))
-                logger.log_training(
-                    redl_main+redl_sc, reduced_losses, reduced_acces, grad_norm_main, learning_rate, duration, iteration)
+            #     duration = time.time() - start
+            #     task = 'TTS' if i%2 == 0 else 'VC'
+            #     print(("Train {} {} {:.6f} Grad Norm {:.6f} {:.2f}s/it".format(
+            #         task, iteration, redl_main+redl_sc, grad_norm_main, duration)))
+            #     logger.log_training(
+            #         redl_main+redl_sc, reduced_losses, reduced_acces, grad_norm_main, learning_rate, duration, iteration)
 
-            if (iteration % hparams.iters_per_checkpoint == 0):
+            if ((iteration+1) % hparams.iters_per_checkpoint == 0):
                 validate(model, criterion, valset, iteration,
                          hparams.batch_size, n_gpus, collate_fn, logger,
                          hparams.distributed_run, rank)

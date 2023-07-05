@@ -280,7 +280,7 @@ class AudioSeq2seq(nn.Module):
         self.memory = memory
         self.processed_memory = self.attention_layer.memory_layer(memory)
         self.mask = mask
-    
+
     def map_states(self, fn):
         '''
         mapping the decoder states using fn
@@ -312,7 +312,7 @@ class AudioSeq2seq(nn.Module):
         attention_weigths_cat = torch.cat(
             (self.attention_weigths.unsqueeze(1),
             self.attention_weigths_cum.unsqueeze(1)),dim=1)
-        
+
         self.attention_context, self.attention_weigths = self.attention_layer(
             self.decoder_hidden, 
             self.memory, 
